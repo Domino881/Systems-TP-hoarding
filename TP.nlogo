@@ -3,7 +3,7 @@ breed [ persons person ]
 breed [ stores store ]
 
 persons-own [ tp-amount destination my-home ]
-stores-own [ tp-stock recently-bought recently-ordered tp-integral sold-out-at ]
+stores-own [ tp-stock recently-bought recently-ordered sold-out-at last-graphing ]
 
 ;; exponential smoothing with slider - how much stores order DONE
 ;; connections - social media
@@ -30,6 +30,7 @@ to setup
     set tp-stock tp-desired-stock
     set recently-ordered tp-stock
     set sold-out-at -40
+    set last-graphing 0
   ]
   set graph-store store 1
 
@@ -154,12 +155,13 @@ to pick
   if mouse-down? and mouse-inside? and not plot-all [
     ask patch mouse-xcor mouse-ycor [
       if not member? graph-store stores with-min [ distance patch mouse-xcor mouse-ycor ][
+        print [last-graphing] of graph-store
+        ask graph-store [ set last-graphing ticks ]
         set graph-store one-of stores with-min [ distance patch mouse-xcor mouse-ycor ]
         set-current-plot "tp stock"
         set-current-plot-pen word "pen-" [who] of graph-store
-        repeat (plot-x-max + plot-x-min) / 2 [ plot 0 ]
+        repeat (plot-x-max + plot-x-min  ) / 2 - [last-graphing] of graph-store [ plot 0 ]
       ]
-;      set-plot-pen-interval ticks
     ]
   ]
 
@@ -444,7 +446,7 @@ BUTTON
 1378
 154
 toggle plot all
-set plot-all not plot-all\nset-current-plot \"tp stock\"\nclear-plot\nset-plot-x-range -250 250
+set plot-all not plot-all\nset-current-plot \"tp stock\"\nif plot-all[\nask stores with [who != [who] of graph-store][\n  set-current-plot-pen word \"pen-\" who\n  repeat (plot-x-max + plot-x-min  ) / 2 - last-graphing [ plot 0 ]\n]\n]\nif not plot-all[\n  ask stores with [who != [who] of graph-store][\n    set last-graphing ticks\n  ]\n]\n;;clear-plot\n;;set-plot-x-range -250 250
 NIL
 1
 T
