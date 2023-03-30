@@ -146,7 +146,7 @@ to graph
 
   set-current-plot "tp usage"
   ask graph-person[
-    plot floor tp-amount
+    plot ceiling tp-amount
   ]
 end
 
@@ -298,7 +298,7 @@ NIL
 10000.0
 false
 true
-"set-plot-x-range -250 250\nset-plot-y-range -50 10000" "set-plot-x-range plot-x-min + 1 plot-x-max + 1"
+"set-plot-x-range -250 250\n" "set-plot-x-range plot-x-min + 1 plot-x-max + 1\nset-plot-y-range 0 tp-capacity"
 PENS
 "pen-0" 1.0 0 -7500403 false "" ""
 "pen-1" 1.0 0 -2674135 false "" ""
