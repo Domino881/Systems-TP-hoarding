@@ -6,7 +6,7 @@ Harry Byrne, Dominik Kuczynski, James Hales, Cormac Niland, Molly Robinson
 
 ## Documentation
 
-<img src="images/full.png" width=300>
+<img src="images/full.png" width="90%">
 
 ### Agents
 
@@ -24,11 +24,11 @@ Stores have a given amount of toilet paper in stock, and they order every month.
 
 ### Parameters
 
-- `maximum-buy-law` -> enabling this will limit each person's tp buying to 25 at a time
-- `inspect patient zero` -> shows the connections "friendships" of one of the most scared persons
-- `COVID` -> pressing will signicantly increase fear in a number of persons
-- `patients-zero` -> determines how many persons will be affected by `COVID`
-- `isolated?` -> determines whether the above mentioned persons will have few friends - be isolated
-- `initial-resilience` -> sets the initial resilience to fear of all the persons
+- `maximum-buy-law` &rarr enabling this will limit each person's tp buying to 25 at a time
+- `inspect patient zero` &rarr shows the connections "friendships" of one of the most scared persons
+- `COVID` &rarr pressing will signicantly increase fear in a number of persons
+- `patients-zero` &rarr determines how many persons will be affected by `COVID`
+- `isolated?` &rarr determines whether the above mentioned persons will have few friends - be isolated
+- `initial-resilience` &rarr sets the initial resilience to fear of all the persons
 
 ### Running the model
