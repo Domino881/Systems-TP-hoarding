@@ -10,7 +10,7 @@ Harry Byrne, Dominik Kuczynski, James Hales, Cormac Niland, Molly Robinson
 
 The agents are as follows: 
 
-- <img src="images/person.png" alt="person" width="30">
+- <img src="images/person.png" style='vertical-align:middle; width:30px">
 
 ### Parameters
 
