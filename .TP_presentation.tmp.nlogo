@@ -14,7 +14,7 @@ to setup
   set-default-shape persons "person"
   set-default-shape stores "house"
   set-default-shape alerts "x"
-  random-seed 89
+  random-seed 8
 
   ;;------------------------------------------- Global variables -------------------------------------------
 
