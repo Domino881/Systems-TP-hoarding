@@ -6,7 +6,7 @@ Harry Byrne, Dominik Kuczynski, James Hales, Cormac Niland, Molly Robinson
 
 ## Documentation
 
-<img src="images/full.png" width="90%">
+<img src="images/full.png" width="100%">
 
 ### Agents
 
@@ -32,4 +32,10 @@ Stores have a given amount of toilet paper in stock, and they order every month.
 - `initial-resilience` &rarr; sets the initial resilience to fear of all the persons
 - `alpha` &rarr; determines how much the stores "learn" from last month's sales: <1 means undercompensating, >1 means overcompensating
 
-### Running the model
+### Plots
+
+- Average fear level &rarr; shows the average fear level among all persons
+- TP rolls in someone's house &rarr; shows the amount of tp currently in the possession of some random person - notice they use it up slower when they have less
+and buy whenever the amount drops below some minimum
+- tp stock &rarr; shows the amount of tp in stock at each of the stores: the colour of the plot line corresponds with the store's color. Top border indicates
+maximum capacity and bottom border is zero - sold out
