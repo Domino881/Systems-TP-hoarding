@@ -24,11 +24,12 @@ Stores have a given amount of toilet paper in stock, and they order every month.
 
 ### Parameters
 
-- `maximum-buy-law` &rarr enabling this will limit each person's tp buying to 25 at a time
-- `inspect patient zero` &rarr shows the connections "friendships" of one of the most scared persons
-- `COVID` &rarr pressing will signicantly increase fear in a number of persons
-- `patients-zero` &rarr determines how many persons will be affected by `COVID`
-- `isolated?` &rarr determines whether the above mentioned persons will have few friends - be isolated
-- `initial-resilience` &rarr sets the initial resilience to fear of all the persons
+- `maximum-buy-law` &rarr; enabling this will limit each person's tp buying to 25 at a time
+- `inspect patient zero` &rarr; shows the connections "friendships" of one of the most scared persons
+- `COVID` &rarr; pressing will signicantly increase fear in a number of persons
+- `patients-zero` &rarr; determines how many persons will be affected by `COVID`
+- `isolated?` &rarr; determines whether the above mentioned persons will have few friends - be isolated
+- `initial-resilience` &rarr; sets the initial resilience to fear of all the persons
+- `alpha` &rarr; determines how much the stores "learn" from last month's sales: <1 means undercompensating, >1 means overcompensating
 
 ### Running the model
