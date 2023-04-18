@@ -1,31 +1,55 @@
-globals [ city-size tp-desired-stock covid tp-capacity graph-store graph-person plot-all ]
+globals [ city-size tp-desired-stock covid tp-capacity average-tp-stock time-covid-started graph-store graph-person plot-all default-color media-scaring media-message media-messages-city
+  fear-forget beta media-last-update
+  tp-avg-amount tp-use-rate tp-min-amount maximum-buy ]
 breed [ persons person ]
 breed [ stores store ]
+breed [ alerts alert ]
 
-persons-own [ tp-amount destination my-home ]
-stores-own [ tp-stock recently-bought recently-ordered sold-out-at last-graphing ]
+persons-own [ tp-amount destination my-home age fear connections hoarding hoarding-threshold max-fear]
+stores-own [ tp-stock recently-bought recently-ordered sold-out-at last-graphing]
 
 ;; exponential smoothing with slider - how much stores order DONE
 ;; connections - social media
-;; age -
+;; age - scale 1-5, 1 being young (20s), 5 being old (70s)
+;; fear - 0-100 after 50 chances of hoarding increase
 
 
 to setup
   clear-all
   set-default-shape persons "person"
   set-default-shape stores "house"
+  set-default-shape alerts "x"
+  random-seed 894
 
   ;;;;;;;;;;;;;;;;;;;; Global variables ;;;;;;;;;;;;;;;;;;;;;;;;;
   set city-size max-pxcor / 15 ;; city size 1/15 of screen
-  set tp-desired-stock 2600
+  set tp-desired-stock 2800
   set tp-capacity 8000
+  set tp-avg-amount 15
+  set tp-use-rate 1
+  set tp-min-amount 3
+
   set covid false
-  set plot-all false
+  set average-tp-stock tp-desired-stock
+  set time-covid-started 0 ;;temporary until covid starts
+  set plot-all true
+  set default-color [70 70 70]
+  set media-scaring 0
+  set media-messages-city [ "Fear is spreading in city " "People are worried about toilet paper in city " ]
+  set media-message "..."
+  set fear-forget 0.7
+  set alpha 0.4
+  set beta 0.15
+  set media-last-update 0
+  set maximum-buy-law false
+  set maximum-buy 25
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
   create-stores 10
   ask stores [
-    set color blue
+    set color round ( who * 14)
+    set color color - (color mod 10) + 7
+    set size 1.5
     setxy random-xcor random-ycor
     set tp-stock tp-desired-stock
     set recently-ordered tp-stock
@@ -36,35 +60,75 @@ to setup
 
   create-persons 1000
   ask persons [
-    set color gray
+    set color default-color
     fd random 25
     let city one-of stores
     setxy [xcor] of city + random-normal 0.0 city-size [ycor] of city + random-normal 0.0 city-size
     set my-home patch-here
     set tp-amount max list 0  (random-normal tp-avg-amount (0.5 * tp-avg-amount) )
+    set age max list 0 (random-normal 40 20)
+    set fear 0
+    set hoarding False
+    set hoarding-threshold 50 + random (age / 4)
+    set max-fear random-normal 70 20
+    make-friends
   ]
   set graph-person person 10
 
+  ask persons [
+    set connections count my-links
+  ]
+
+  ask links [
+    set color green
+    hide-link
+  ]
   reset-ticks
+end
+
+to make-friends
+  let n random 7
+  let tries 10
+
+  while [ count my-links < n and tries > 0][
+    ;; sometimes there will be no friends to add, in that case try 10 times and give up
+
+    (ifelse random-float 1 < 0.6[
+      ;; 60% chance for friend from within city
+      if count other persons with [ distance myself < city-size and not member? self link-neighbors] > 0 [
+        create-link-with one-of other persons with [ distance myself < city-size and not member? self link-neighbors]
+      ]
+    ][
+      ;; 40% chance for long-distance friend
+      if count other persons with [ distance myself > city-size and not member? self link-neighbors] > 0 [
+        create-link-with one-of other persons with [ distance myself > city-size and not member? self link-neighbors]
+      ]
+    ])
+    set tries (tries - 1)
+  ]
+end
+
+to show-my-links
+  ask my-links [ show-link ]
 end
 
 to consume-tp
   ;;when there's enough tp, use at tp-use-rate
   ;;when it's ending, use more and more slowly (ration)
-  set tp-amount tp-amount - tp-use-rate * (1 - exp(-0.5 / tp-min-amount * tp-amount) )
+  set tp-amount tp-amount - 0.1 * tp-use-rate * (1 - exp(-0.5 / tp-min-amount * tp-amount) )
 end
 
 to wander
   ;;if at a store, shop
-  if is-store? destination and distance destination < 2
-  [ shop ]
+  if is-store? destination and distance destination < 2 [ shop ]
+  ;;[ ifelse hoarding [ hoard ] [ shop ]]
 
   ;;if at home, clear destination
   if destination = my-home and patch-here = destination
   [ set destination 0 ]
 
   ;;if tp ran out, set the destination as one of 3 closest stores
-  if tp-amount < tp-min-amount and destination = 0
+  if ( tp-amount < tp-min-amount or (hoarding and random-float 1 < 0.1) ) and destination = 0
   [ set destination one-of min-n-of 3 stores [ distance myself ] ]
 
   ;; if has a destination set (store/home), go towards it
@@ -81,12 +145,52 @@ to wander
     ])
 end
 
+to get-scared
+  ;; fear increases chance of hoarding, having a lot of tp at home decreases it
+  (ifelse (fear > hoarding-threshold and not hoarding)  [
+    if ((fear / 100) - (tp-amount / (8 * tp-avg-amount))) >= (random-float 1) [
+      set hoarding True
+    ]
+  ][
+      set hoarding False
+  ])
+  ;; make color more red when scared
+  set color replace-item 0 color min list 255 (70 + 2 * fear)
+
+  ;; become more resistant to fear (forget faster) with time
+  if time-covid-started > 0 [set fear-forget min list (2.5 * 0.7) (0.7 * (initial-resilience + ((ticks - time-covid-started) / 1000) ^ 2))]
+
+  set fear fear - fear-forget
+
+  set fear min list max-fear fear
+  set fear max list 0 fear
+end
+
+to link-spread-fear
+  ;; fear is spread by links - each link increases the fear of its less scared end
+  ;; => kind of like the more scared person scaring the other
+  if random-float 1 < 0.01[
+    ask min-one-of both-ends [fear][
+      if (([fear] of other-end) - fear) > 10[
+        set fear fear + (random-float 2) * ([fear] of other-end);;0.2 * ( fear + 3 * maxfear + minfear )
+      ]
+    ]
+  ]
+end
+
 to shop
   let this-store one-of stores with [ distance myself < 2.5 ]
 
   ;;amount buying is either desired-buy or however much is left in store
   let desired-buy max list (tp-min-amount + 7) (random-normal (0.5 * tp-avg-amount) (0.5 * tp-avg-amount) )
+
+  ;; if hoarding, buy up to 10 times the usual amount
+  if hoarding[
+    set desired-buy max list (tp-min-amount + 7) ( (1 + random-normal 8 2) * (desired-buy) )
+  ]
+
   let amount-buying min list desired-buy [tp-stock] of this-store
+  if maximum-buy-law [ set amount-buying min list desired-buy maximum-buy ]
 
   ;;if couldn't buy anything, look for next closest store
   ;;if none of stores have stock, do nothing
@@ -95,6 +199,8 @@ to shop
     let new-dest min-one-of stores with [ tp-stock > 0] [distance myself]
     set destination new-dest
     ]
+
+    set fear min list max-fear (fear + 10)
 
     ask this-store [ if ticks - sold-out-at > 30 [set sold-out-at ticks] ]
   ]
@@ -109,8 +215,46 @@ to shop
   if tp-amount > tp-min-amount [ set destination my-home ]
 end
 
-to-report avg-stock
-  report mean [ tp-stock ] of stores
+to-report media
+  if (ticks - media-last-update) > 200[
+    set media-last-update ticks
+
+    ;; report fear in cities
+    let fear-stores (stores with [count persons with [distance myself < city-size and fear > 7] > 5])
+    (ifelse any? fear-stores [
+      ask one-of fear-stores[
+        set media-scaring 1
+        set media-message word (item (random (length media-messages-city) ) media-messages-city) who
+      ]
+    ][
+      set media-message "..."
+      set media-scaring 0
+    ])
+
+    if media-scaring [ask persons [ set fear fear + (0.08 * media-scaring) * (100 - fear) ]]
+
+  ]
+
+  ;; report out of stock
+  if (any? stores with [tp-stock = 0]) and (media-scaring != 5 or (ticks - media-last-update) > 200)[
+    let store-list ([who] of stores with [tp-stock = 0])
+    if length store-list = 1 [
+      set media-message word "Breaking news: no toilet paper in store "  (but-first but-last word "" store-list)
+      set media-scaring 3
+    ]
+    if length store-list > 1 [
+      set media-message "Breaking news: toilet paper shortage!"
+      set media-scaring 5
+    ]
+    ;;set media-last-update ticks
+  ]
+
+  if empty? media-message [ report "..." ]
+  report media-message
+end
+
+to-report people-hoarding
+  report count persons with [hoarding]
 end
 
 to order
@@ -129,23 +273,27 @@ to graph
   ask stores [
     if plot-all [
       set-current-plot-pen word "pen-" who
+      set-plot-pen-color color
       plot tp-stock
     ]
-    if tp-stock < 0 [ set color red ]
-    if tp-stock > 0 [ set color blue ]
+    if tp-stock <= 0 [
+      hatch-alerts 1 [ set color black ]
+    ]
+    if tp-stock > 0 [ ask alerts-here [die] ]
 
-    set label precision tp-stock 0
+
+    ;;set label precision tp-stock 0
   ]
 
   if not plot-all[
     ask graph-store[
-      set color yellow
+      ;;set color yellow
       set-current-plot-pen word "pen-" who
       plot tp-stock
     ]
   ]
 
-  set-current-plot "tp usage"
+  set-current-plot "TP rolls in someone's house"
   ask graph-person[
     plot ceiling tp-amount
   ]
@@ -167,27 +315,47 @@ to pick
 
 end
 
+to-report avg-stock
+  report mean [ tp-stock ] of stores
+end
+
+to-report average-fear
+  let avg-fear mean [ fear ] of persons
+  report avg-fear
+end
+
+to-report resilience
+  report fear-forget / 0.7
+end
+
 to go
-tick
   ask persons [ consume-tp ]
   ask persons [ wander ]
+  set average-tp-stock mean [ tp-stock ] of stores
+
+  ;;print average-tp-stock
+  ;;if ticks mod 10 = 0 [
+  ;;  ask n-of 100 persons [ get-scared ]
+  ;;]
+  ask persons [ get-scared ]
+  ask links [ link-spread-fear ]
 
   ;;stores order stock on their respective days of the month (i. e. store 7 will order every 7th)
-  ask stores [ if ticks mod 300 = 10 * who mod 300 [ order ] ]
+  ask stores [ if (ticks - 200) mod 300 = (10 * who) mod 300 [ order ] ]
   graph
   pick
 
-
+  tick
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-315
-10
-771
-479
+370
+114
+916
+675
 -1
 -1
-12.11
+14.541
 1
 10
 1
@@ -241,56 +409,11 @@ NIL
 NIL
 0
 
-SLIDER
-800
-59
-972
-92
-tp-use-rate
-tp-use-rate
-0
-3
-0.1
-0.01
-1
-NIL
-HORIZONTAL
-
-SLIDER
-801
-107
-973
-140
-tp-min-amount
-tp-min-amount
-0
-50
-2.0
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-798
-10
-970
-43
-tp-avg-amount
-tp-avg-amount
-0
-200
-10.0
-1
-1
-NIL
-HORIZONTAL
-
 PLOT
-799
-162
-1380
-448
+940
+232
+1391
+622
 tp stock
 NIL
 NIL
@@ -300,7 +423,7 @@ NIL
 10000.0
 false
 true
-"set-plot-x-range -250 250\n" "set-plot-x-range plot-x-min + 1 plot-x-max + 1\nset-plot-y-range 0 tp-capacity"
+"set-plot-x-range -250 250\nset-plot-background-color black" "set-plot-x-range plot-x-min + 1 plot-x-max + 1\nset-plot-y-range 0 tp-capacity"
 PENS
 "pen-0" 1.0 0 -7500403 false "" ""
 "pen-1" 1.0 0 -2674135 false "" ""
@@ -323,8 +446,8 @@ BUTTON
 102
 169
 135
-inspect random person
-set graph-person one-of persons\nask graph-person [ set color green ]\ninspect graph-person\nset-current-plot \"tp usage\"\nplot-pen-reset\nset-plot-x-range -250 250
+inspect patient zero
+;;set graph-person max-one-of persons [ fear ]\n;;ask graph-person [ set color [ 0 255 0 ] ]\n;;inspect graph-person\nask graph-person [show-my-links]\nset-current-plot \"TP rolls in someone's house\"\nplot-pen-reset\nset-plot-x-range -250 250
 NIL
 1
 T
@@ -336,60 +459,30 @@ NIL
 1
 
 PLOT
-196
-490
-761
-640
-tp usage
+25
+439
+341
+599
+TP rolls in someone's house
 NIL
 NIL
 0.0
 10.0
 0.0
 10.0
+true
 false
-false
-"set-plot-x-range -250 250\n" "set-plot-x-range plot-x-min + 1 plot-x-max + 1\nset-plot-y-range 0 tp-avg-amount + tp-min-amount + 2"
+"set-plot-x-range -250 250\nset-plot-background-color black" "set-plot-x-range plot-x-min + 1 plot-x-max + 1\n;;set-plot-y-range 0 tp-avg-amount + tp-min-amount + 2"
 PENS
-"default" 1.0 0 -16777216 true "" ""
-
-SLIDER
-962
-597
-1134
-630
-alpha
-alpha
-0
-3
-0.4
-0.01
-1
-NIL
-HORIZONTAL
-
-SLIDER
-1141
-597
-1313
-630
-beta
-beta
-0
-10
-0.2548
-0.0001
-1
-NIL
-HORIZONTAL
+"pen-0" 1.0 0 -1 true "" ""
 
 BUTTON
-1047
-37
-1185
-70
-COVID toggle
-set covid not covid\n\n\n  if covid [\n    set tp-avg-amount 20\n    set tp-min-amount 5\n    set tp-use-rate 0.1\n  ]\n  if not covid [\n    set tp-avg-amount 10\n    set tp-min-amount 2\n    set tp-use-rate 0.1\n  ]
+943
+10
+1143
+65
+COVID
+set covid not covid\n  \n  (ifelse isolated? [\n    ask n-of Patients-zero persons with [count my-links < 2][\n      set fear 100\n    ]\n  ][\n    ask n-of Patients-zero persons [\n      set fear 100\n    ]\n  ])\n  \n  if time-covid-started = 0[\n    set time-covid-started ticks + 1\n  ]\n\n  ask persons with [fear = 100] [ set color [ 255 0 0 ] ]\n  set graph-person one-of persons with [fear > 90]
 NIL
 1
 T
@@ -400,51 +493,11 @@ NIL
 NIL
 1
 
-TEXTBOX
-1049
-17
-1199
-35
-Timescale - 10 ticks=1 day\n
-11
-0.0
-1
-
-TEXTBOX
-319
-646
-565
-702
-This ^ is the tp amount a single person has - they use it up slower as they are running out
-11
-0.0
-1
-
-TEXTBOX
-971
-455
-1216
-483
-^ Graph of tp stock in yellow store / all stores
-11
-0.0
-1
-
-TEXTBOX
-846
-545
-1319
-594
-The equation for predicting how much TP stores should order next month is:\n\norder = previous_order + alpha(previous_order - tp_sold) + beta(desired_tp_stock - tp_stock)
-11
-0.0
-1
-
 BUTTON
-1269
-121
-1378
-154
+1281
+627
+1390
+660
 toggle plot all
 set plot-all not plot-all\nset-current-plot \"tp stock\"\nif plot-all[\nask stores with [who != [who] of graph-store][\n  set-current-plot-pen word \"pen-\" who\n  repeat (plot-x-max + plot-x-min  ) / 2 - last-graphing [ plot 0 ]\n]\n]\nif not plot-all[\n  ask stores with [who != [who] of graph-store][\n    set last-graphing ticks\n  ]\n]\n;;clear-plot\n;;set-plot-x-range -250 250
 NIL
@@ -456,6 +509,124 @@ NIL
 NIL
 NIL
 1
+
+PLOT
+9
+148
+362
+426
+Average fear level
+NIL
+NIL
+0.0
+10.0
+-0.5
+10.0
+true
+false
+"set-plot-x-range -1000 400\nset-plot-background-color black" "set-plot-x-range plot-x-min + 1 plot-x-max + 1"
+PENS
+"default" 1.0 0 -2674135 true "" "plot average-fear"
+
+MONITOR
+355
+10
+929
+111
+TP News
+media
+0
+1
+25
+
+MONITOR
+132
+620
+236
+665
+NIL
+people-hoarding
+0
+1
+11
+
+SLIDER
+940
+628
+1112
+661
+alpha
+alpha
+0
+2
+0.4
+0.01
+1
+NIL
+HORIZONTAL
+
+SLIDER
+945
+77
+1143
+110
+Patients-zero
+Patients-zero
+0
+10
+1.0
+1
+1
+NIL
+HORIZONTAL
+
+SWITCH
+1149
+77
+1254
+110
+isolated?
+isolated?
+1
+1
+-1000
+
+SWITCH
+152
+29
+311
+62
+maximum-buy-law
+maximum-buy-law
+1
+1
+-1000
+
+SLIDER
+1119
+176
+1291
+209
+initial-resilience
+initial-resilience
+0
+2
+1.0
+0.1
+1
+NIL
+HORIZONTAL
+
+MONITOR
+1302
+154
+1390
+219
+NIL
+resilience
+1
+1
+16
 
 @#$#@#$#@
 ## WHAT IS IT?
